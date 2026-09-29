@@ -15,6 +15,20 @@ Creating content consistently can involve a lot of repetitive work:
 - Reviewing the content
 - Publishing it
 
+## Screenshots
+
+### Complete n8n Workflow
+
+![Complete n8n Workflow](https://github.com/Maira-Nawaz/ai-news-to-linkedin-automation/blob/main/assets/Workflow.jpeg)
+
+### Human Approval Email
+
+![Human Approval Email](https://github.com/Maira-Nawaz/ai-news-to-linkedin-automation/blob/main/assets/Approval.jpeg)
+
+### Generated LinkedIn Post
+
+![Published LinkedIn Post](https://github.com/Maira-Nawaz/ai-news-to-linkedin-automation/blob/main/assets/Linkedin%20Posting.png)
+
 This workflow automates most of that process using **n8n + LLMs + APIs**, while keeping a **Human-in-the-Loop (HITL)** approval step before anything is published.
 
 The workflow follows a simple principle:
@@ -162,19 +176,6 @@ The final request publishes the approved text as a public LinkedIn post.
 | **HTTP Request** | API communication |
 | **JavaScript** | Data transformation and filtering |
 
-## Screenshots
-
-### Complete n8n Workflow
-
-![Complete n8n Workflow](screenshots/workflow.png)
-
-### Human Approval Email
-
-![Human Approval Email](screenshots/approval-email.png)
-
-### Generated LinkedIn Post
-
-![Published LinkedIn Post](screenshots/linkedin-post.png)
 
 ## Design Principles
 
