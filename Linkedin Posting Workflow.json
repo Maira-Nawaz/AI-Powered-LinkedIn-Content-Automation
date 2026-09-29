@@ -1,0 +1,638 @@
+{
+  "name": "Linkedin Posting Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "0c99e387-044a-40ae-8faf-55a9eed732e6",
+      "name": "Daily Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -32,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cutoff = Date.now() - 24 * 60 * 60 * 1000;\n\nreturn $input.all().filter(item => {\n  const published = item.json.published;\n  const timestamp = Date.parse(published);\n\n  return !isNaN(timestamp) && timestamp >= cutoff;\n});"
+      },
+      "id": "3cdb9053-fad3-4c93-9736-a3e31b8a7b69",
+      "name": "Keep Last 24 Hours",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({\n  json: {\n    ...item.json,\n    relevancePrompt: `You are a news relevance classifier.\\n\\nTarget topics: AI, generative AI, data engineering, analytics, automation, marketing technology, and AI agents.\\n\\nArticle title: ${item.json.title}\\nSummary: ${item.json.summary}\\nSource: ${item.json.source}\\nURL: ${item.json.url}\\n\\nReturn ONLY JSON in this format: {\"relevant\":true,\"reason\":\"short reason\"}. Mark relevant only when the story is genuinely useful for a professional audience interested in the target topics.`\n  }\n}));"
+      },
+      "id": "ccabcfed-2e68-4961-9eb7-9bf80dd61b29",
+      "name": "Build Relevance Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output || $json.text || '';\nlet parsed;\ntry {\n  parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;\n} catch {\n  parsed = {relevant:false, reason:'Could not parse classifier output'};\n}\nconst original = $('Build Relevance Prompt').item.json;\nreturn [{json:{...original, relevant:Boolean(parsed.relevant), relevanceReason:parsed.reason || ''}}];"
+      },
+      "id": "f7bfa130-b35d-4be6-bddc-5281d22cb7b2",
+      "name": "Parse Relevance",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1536,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1c03b999-b816-4288-ab48-dd109f7f0768",
+              "leftValue": "={{ $json.relevant }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "639fd5ab-d3ac-454c-9348-25761b679468",
+      "name": "Relevant?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1712,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    ...$json,\n    draftPrompt: `You are a social media content strategist. Create a draft social post from the article below.\n\nBrand voice:\n- Practical, clear, confident, and human\n- Teach something useful before mentioning any opinion\n- Avoid hype, clickbait, and unsupported claims\n- Do not copy the source article\n- Keep the post concise enough for LinkedIn\n- Include a short hook, 3-5 useful points, and a closing question\n- Include the source URL at the end\n\nArticle:\nTitle: ${$json.title}\nSummary: ${$json.summary}\nSource: ${$json.source}\nURL: ${$json.url}\n\nReturn ONLY JSON:\n{\"post\":\"...\",\"hook\":\"...\",\"sourceUrl\":\"${$json.url}\"}`\n  }\n}];"
+      },
+      "id": "cfa5da2b-4834-4b90-8063-ef8dce05feb9",
+      "name": "Build Draft Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output || $json.text || '';\nlet draft;\ntry { draft = typeof raw === 'string' ? JSON.parse(raw) : raw; }\ncatch { draft = {post: raw, hook: '', sourceUrl: $('Build Draft Prompt').item.json.url}; }\nconst source = $('Build Draft Prompt').item.json;\nreturn [{json:{...source, post:draft.post || '', hook:draft.hook || '', sourceUrl:draft.sourceUrl || source.url}}];"
+      },
+      "id": "5bef2cb2-27eb-453a-bf93-a6e22e3f5614",
+      "name": "Parse Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2384,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $json.post || '';\nconst html = `<h2>AI Social Post — Human Review Required</h2>\n<p><b>Source:</b> ${$json.source}</p>\n<p><b>Article:</b> <a href=\"${$json.url}\">${$json.title}</a></p>\n<hr>\n<p>${p.replace(/\\n/g,'<br>')}</p>\n<hr>\n<p><b>Relevance:</b> ${$json.relevanceReason || 'Relevant to the selected topics.'}</p>\n<p>Approve only if the facts, framing, and brand voice look right.</p>`;\nreturn [{json:{...$json, approvalSubject:`Approve social post: ${$json.title}`, approvalHtml:html}}];"
+      },
+      "id": "d269b8c0-d606-4df0-8d36-15deda210db5",
+      "name": "Build Approval Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2592,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "mairanawaz.ch@gmail.com",
+        "subject": "={{ $json.approvalSubject }}",
+        "message": "={{ $json.approvalHtml }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double"
+          }
+        },
+        "options": {}
+      },
+      "id": "2455873e-b6f0-4da4-9c28-d04ea0ad3f3c",
+      "name": "Human Approval - Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2816,
+        0
+      ],
+      "webhookId": "1f8f4274-d215-4163-8ef9-19032aa60b71",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "4cHj2Z2vVuiKhqDg",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f2c0477f-8217-42bc-88b3-a1289d469340",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "83243f8f-f234-49a8-8aef-c73c8a88a49f",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3040,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "dc46bbc3-b7e0-498f-8de9-c5b599f86082",
+      "name": "No relevant story - Stop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        144
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "8a36611e-26b7-49b9-90bb-f6e46d16d765",
+      "name": "Rejected - Stop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3312,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://gnews.io/api/v4/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "AI OR \"generative AI\" OR \"AI agents\""
+            },
+            {
+              "name": "max",
+              "value": "10"
+            },
+            {
+              "name": "apikey",
+              "value": "9c9c2dc1cba42f4db7c5c0da8a07d258"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2b0dd69d-7e78-4bfd-8678-dfa3fea2f3e8",
+      "name": "HTTP Request - GNews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        176,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const articles = $json.articles || [];\n\nreturn articles.map(article => ({\n  json: {\n    title: article.title || '',\n    url: article.url || '',\n    summary: article.description || article.content || '',\n    published: article.publishedAt || '',\n    source: article.source?.name || '',\n    sourceUrl: article.source?.url || '',\n    image: article.image || ''\n  }\n}));"
+      },
+      "id": "a65ebdf4-e9bd-48c5-af5e-70112aed6579",
+      "name": "Normalize Articles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.relevancePrompt }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1248,
+        0
+      ],
+      "id": "8cd5003b-2d50-44ed-97df-252555ce8a21",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "qwen/qwen3.8-27b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        272
+      ],
+      "id": "3c8ad37c-0ece-4f6a-89f0-721029dafc4b",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "afz1UUyUkVHaJubh",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "maxItems": 3
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        816,
+        0
+      ],
+      "id": "09b33ea5-21d3-4b1f-801d-79bf3534253e",
+      "name": "Limit"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.draftPrompt }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2112,
+        0
+      ],
+      "id": "a7e625a6-ae1e-467e-b62b-8e69538464cc",
+      "name": "Basic LLM Chain1"
+    },
+    {
+      "parameters": {
+        "model": "qwen/qwen3.8-27b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        2112,
+        288
+      ],
+      "id": "c87f1896-636d-4d31-baa0-e68a3944e417",
+      "name": "Groq Chat Model1",
+      "credentials": {
+        "groqApi": {
+          "id": "afz1UUyUkVHaJubh",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.linkedin.com/v2/userinfo",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3280,
+        -144
+      ],
+      "id": "d6a38e5a-33d1-4c5a-b0a1-adc97c3b2be0",
+      "name": "Get LinkedIn Member",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "eAAEmjcfCL3MqTRZ",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linkedin.com/v2/ugcPosts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Restli-Protocol-Version",
+              "value": "2.0.0"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"author\": \"urn:li:person:{{ $json.sub }}\",\n  \"lifecycleState\": \"PUBLISHED\",\n  \"specificContent\": {\n    \"com.linkedin.ugc.ShareContent\": {\n      \"shareCommentary\": {\n        \"attributes\": [],\n        \"text\": {{ JSON.stringify($('Parse Draft').first().json.post) }}\n      },\n      \"shareMediaCategory\": \"NONE\",\n      \"media\": []\n    }\n  },\n  \"visibility\": {\n    \"com.linkedin.ugc.MemberNetworkVisibility\": \"PUBLIC\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3536,
+        -144
+      ],
+      "id": "c406e83e-5e31-4727-94d4-b3872d70d63b",
+      "name": "Post on Linkedin",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "eAAEmjcfCL3MqTRZ",
+          "name": "Unnamed credential"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - GNews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Last 24 Hours": {
+      "main": [
+        [
+          {
+            "node": "Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Relevance Prompt": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Relevance": {
+      "main": [
+        [
+          {
+            "node": "Relevant?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Relevant?": {
+      "main": [
+        [
+          {
+            "node": "Build Draft Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No relevant story - Stop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Draft Prompt": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Draft": {
+      "main": [
+        [
+          {
+            "node": "Build Approval Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Approval Email": {
+      "main": [
+        [
+          {
+            "node": "Human Approval - Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Human Approval - Gmail": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Get LinkedIn Member",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rejected - Stop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - GNews": {
+      "main": [
+        [
+          {
+            "node": "Normalize Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Articles": {
+      "main": [
+        [
+          {
+            "node": "Keep Last 24 Hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Parse Relevance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit": {
+      "main": [
+        [
+          {
+            "node": "Build Relevance Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain1": {
+      "main": [
+        [
+          {
+            "node": "Parse Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get LinkedIn Member": {
+      "main": [
+        [
+          {
+            "node": "Post on Linkedin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "1c9a9412-37a3-45b4-8445-ebe77a9cb9a8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c461f6408fa6e2ad87cec4d1f7e60ae35ed452fdfc4316997020b0ac18efbc67"
+  },
+  "nodeGroups": [],
+  "id": "dP6rZTiKQyQfAHsY",
+  "tags": []
+}
