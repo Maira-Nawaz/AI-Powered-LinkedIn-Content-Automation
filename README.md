@@ -1,4 +1,4 @@
-# AI News to LinkedIn Automation with n8n
+# AI-Powered LinkedIn Content Automation
 
 An AI-powered, human-in-the-loop workflow that automatically discovers relevant industry news, evaluates its relevance, generates a LinkedIn post, sends it for human approval, and publishes the approved content to LinkedIn.
 
