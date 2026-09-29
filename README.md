@@ -15,7 +15,6 @@ Creating content consistently can involve a lot of repetitive work:
 - Reviewing the content
 - Publishing it
 
-## Screenshots
 
 ### Complete n8n Workflow
 
